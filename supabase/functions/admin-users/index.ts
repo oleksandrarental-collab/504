@@ -18,21 +18,28 @@ Deno.serve(async (req) => {
     if (!user) return json({ error: 'Нужен вход' }, 401);
 
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
-    const { data: me } = await admin.from('profiles').select('role,active').eq('id', user.id).single();
+    const { data: me } = await admin.from('profiles').select('id,role,active').eq('id', user.id).single();
     if (!me || me.role !== 'admin' || !me.active) return json({ error: 'Только администратор' }, 403);
 
     const b = await req.json();
-    const domain = 'sklad.internal'; // = settings.login_domain; клиент входит как <login>@sklad.internal
+    const domain = 'sklad.internal';
 
     const loadTarget = async () => {
       const { data } = await admin.from('profiles').select('id,role').eq('id', b.id).single();
-      return data && data.role === 'supervisor' ? data : null;
+      return data;
+    };
+
+    const countAdmins = async (excludeId?: string) => {
+      let q = admin.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin').eq('active', true);
+      if (excludeId) q = q.neq('id', excludeId);
+      const { count } = await q;
+      return count ?? 0;
     };
 
     switch (b.action) {
       case 'list': {
         const { data, error } = await admin.from('profiles')
-          .select('id,login,full_name,active,created_at').eq('role', 'supervisor').order('created_at');
+          .select('id,login,full_name,role,active,created_at').order('created_at');
         if (error) return json({ error: error.message }, 400);
         return json({ users: data });
       }
@@ -40,6 +47,7 @@ Deno.serve(async (req) => {
         const login = String(b.login ?? '').trim().toLowerCase();
         const password = String(b.password ?? '');
         const fullName = String(b.full_name ?? '').trim();
+        const role = ['admin', 'manager', 'supervisor'].includes(String(b.role)) ? String(b.role) : 'supervisor';
         if (!/^[a-z0-9._-]{3,32}$/.test(login)) return json({ error: 'Логин: 3–32 символа a-z, 0-9, . _ -' }, 400);
         if (password.length < 8) return json({ error: 'Пароль не короче 8 символов' }, 400);
         if (!fullName) return json({ error: 'Укажите имя' }, 400);
@@ -48,32 +56,40 @@ Deno.serve(async (req) => {
         });
         if (error || !created.user) return json({ error: error?.message ?? 'Не удалось создать' }, 400);
         const { error: pe } = await admin.from('profiles').insert({
-          id: created.user.id, login, full_name: fullName, role: 'supervisor',
+          id: created.user.id, login, full_name: fullName, role,
         });
         if (pe) { await admin.auth.admin.deleteUser(created.user.id); return json({ error: pe.message }, 400); }
         return json({ id: created.user.id, login });
       }
       case 'set_password': {
-        if (!(await loadTarget())) return json({ error: 'Пользователь не найден' }, 404);
+        const target = await loadTarget();
+        if (!target) return json({ error: 'Пользователь не найден' }, 404);
         if (String(b.password ?? '').length < 8) return json({ error: 'Пароль не короче 8 символов' }, 400);
         const { error } = await admin.auth.admin.updateUserById(b.id, { password: b.password });
         return error ? json({ error: error.message }, 400) : json({ ok: true });
       }
       case 'set_active': {
-        if (!(await loadTarget())) return json({ error: 'Пользователь не найден' }, 404);
+        const target = await loadTarget();
+        if (!target) return json({ error: 'Пользователь не найден' }, 404);
         const active = !!b.active;
+        if (!active && target.id === me.id) return json({ error: 'self' }, 400);
+        if (!active && target.role === 'admin' && (await countAdmins(target.id)) === 0) return json({ error: 'last_admin' }, 400);
         const { error } = await admin.auth.admin.updateUserById(b.id, { ban_duration: active ? 'none' : '876000h' });
         if (error) return json({ error: error.message }, 400);
         await admin.from('profiles').update({ active }).eq('id', b.id);
         return json({ ok: true });
       }
       case 'rename': {
-        if (!(await loadTarget())) return json({ error: 'Пользователь не найден' }, 404);
+        const target = await loadTarget();
+        if (!target) return json({ error: 'Пользователь не найден' }, 404);
         await admin.from('profiles').update({ full_name: String(b.full_name ?? '').trim() }).eq('id', b.id);
         return json({ ok: true });
       }
       case 'delete': {
-        if (!(await loadTarget())) return json({ error: 'Пользователь не найден' }, 404);
+        const target = await loadTarget();
+        if (!target) return json({ error: 'Пользователь не найден' }, 404);
+        if (target.id === me.id) return json({ error: 'self' }, 400);
+        if (target.role === 'admin' && (await countAdmins(target.id)) === 0) return json({ error: 'last_admin' }, 400);
         const { error } = await admin.auth.admin.deleteUser(b.id);
         return error ? json({ error: error.message }, 400) : json({ ok: true });
       }

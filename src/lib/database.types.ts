@@ -1,6 +1,6 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
-export type AppRole = 'admin' | 'supervisor'
+export type AppRole = 'admin' | 'supervisor' | 'manager'
 export type AptType = 'studio' | '1br' | '2br'
 export type ItemKind = 'asset' | 'consumable'
 export type BaseUnit = 'pcs' | 'g' | 'ml'

@@ -117,5 +117,7 @@ export const useAuth = create<AuthStore>((set) => ({
 }))
 
 export function homePathForRole(role: AppRole): string {
-  return role === 'admin' ? '/admin' : '/sv'
+  if (role === 'admin') return '/admin'
+  if (role === 'manager') return '/qr'
+  return '/sv'
 }
