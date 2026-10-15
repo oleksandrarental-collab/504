@@ -118,6 +118,13 @@ export const en: Dict = {
     balance: 'Balance',
     minimum: 'min.',
     noGroup: 'No group',
+    ok: 'OK',
+    justNow: 'just now',
+    minutesAgo: 'min ago',
+    hoursAgo: 'h ago',
+    daysAgo: 'd ago',
+    clipboardError: 'Clipboard error',
+    videoMetadataError: 'Cannot read video metadata',
     units: { pcs: 'pcs', g: 'g', ml: 'ml' },
   },
   qr: {

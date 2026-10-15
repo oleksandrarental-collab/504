@@ -374,7 +374,7 @@ export function AdminApartmentDetail() {
               </div>
             )}
             <button onClick={() => setIssueResult(null)} className="w-full bg-app text-ink rounded-lg py-3 font-medium text-sm">
-              OK
+              {t.common.ok}
             </button>
           </div>
         </>

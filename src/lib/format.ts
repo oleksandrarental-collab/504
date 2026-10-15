@@ -45,11 +45,12 @@ export function relativeTime(iso: string | null): string {
   const diffMin = Math.floor(diffMs / 60000)
   const diffH = Math.floor(diffMin / 60)
   const diffD = Math.floor(diffH / 24)
+  const dict = currentDict()
   const loc = locale()
-  if (diffMin < 1) return loc === 'ar-EG' ? 'الآن' : 'только что'
-  if (diffMin < 60) return loc === 'ar-EG' ? `منذ ${diffMin.toLocaleString(loc)} دقيقة` : `${diffMin.toLocaleString(loc)} мин назад`
-  if (diffH < 24) return loc === 'ar-EG' ? `منذ ${diffH.toLocaleString(loc)} ساعة` : `${diffH.toLocaleString(loc)} ч назад`
-  if (diffD < 7) return loc === 'ar-EG' ? `منذ ${diffD.toLocaleString(loc)} يوم` : `${diffD.toLocaleString(loc)} дн назад`
+  if (diffMin < 1) return dict.common.justNow
+  if (diffMin < 60) return `${diffMin.toLocaleString(loc)} ${dict.common.minutesAgo}`
+  if (diffH < 24) return `${diffH.toLocaleString(loc)} ${dict.common.hoursAgo}`
+  if (diffD < 7) return `${diffD.toLocaleString(loc)} ${dict.common.daysAgo}`
   return formatDate(iso)
 }
 

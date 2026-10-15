@@ -106,7 +106,7 @@ export function QrPage() {
       await navigator.clipboard.writeText(`${baseUrl}/qr/${aptId}`)
       toast(t.qr.linkCopied, 'success')
     } catch {
-      toast(errorMessage(new Error('Clipboard error')), 'error')
+      toast(t.common.clipboardError, 'error')
     }
   }
 

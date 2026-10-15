@@ -119,6 +119,13 @@ export const ar: Dict = {
     balance: 'المتبقي',
     minimum: 'أدنى',
     noGroup: 'من غير مجموعة',
+    ok: 'تمام',
+    justNow: 'دلوقتي',
+    minutesAgo: 'دقيقة',
+    hoursAgo: 'ساعة',
+    daysAgo: 'يوم',
+    clipboardError: 'غلط في النسخ',
+    videoMetadataError: 'مفيش قراءة للفيديو',
     units: { pcs: 'قطعة', g: 'جم', ml: 'مل' },
   },
   qr: {

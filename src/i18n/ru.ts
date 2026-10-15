@@ -116,6 +116,13 @@ export const ru = {
     balance: 'Остаток',
     minimum: 'мин.',
     noGroup: 'Без группы',
+    ok: 'OK',
+    justNow: 'только что',
+    minutesAgo: 'мин назад',
+    hoursAgo: 'ч назад',
+    daysAgo: 'дн назад',
+    clipboardError: 'Ошибка копирования',
+    videoMetadataError: 'Не удалось прочитать видео',
     units: { pcs: 'шт', g: 'г', ml: 'мл' },
   },
   qr: {

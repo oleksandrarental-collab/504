@@ -190,7 +190,7 @@ export function QrApartmentPage() {
       const duration = await getVideoDuration(file)
       if (duration > 60) { toast(t.qr.videoTooLong, 'error'); return }
     } catch {
-      toast(errorMessage(new Error('Cannot read video metadata')), 'error')
+      toast(t.common.videoMetadataError, 'error')
       return
     }
     setUploadingFile(true)
