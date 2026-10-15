@@ -29,6 +29,7 @@ const AdminContacts = lazy(() => import('@/modules/admin/AdminContacts').then(m 
 const NormTemplatesPage = lazy(() => import('@/modules/admin/NormTemplatesPage').then(m => ({ default: m.NormTemplatesPage })))
 const CatalogPage = lazy(() => import('@/modules/admin/CatalogPage').then(m => ({ default: m.CatalogPage })))
 const QrPage = lazy(() => import('@/modules/admin/QrPage').then(m => ({ default: m.QrPage })))
+const ReportsPage = lazy(() => import('@/modules/admin/ReportsPage').then(m => ({ default: m.ReportsPage })))
 const DocumentsPage = lazy(() => import('@/modules/admin/DocumentsPage').then(m => ({ default: m.DocumentsPage })))
 const DocumentDetailPage = lazy(() => import('@/modules/admin/DocumentDetailPage').then(m => ({ default: m.DocumentDetailPage })))
 const QrApartmentPage = lazy(() => import('@/modules/qr/QrApartmentPage').then(m => ({ default: m.QrApartmentPage })))
@@ -123,6 +124,7 @@ export function AdminRoutes() {
           <Route path="more/norm-templates" element={<NormTemplatesPage />} />
           <Route path="more/catalog" element={<CatalogPage />} />
           <Route path="more/qr" element={<QrPage />} />
+          <Route path="more/reports" element={<ReportsPage />} />
           <Route path="more/documents" element={<DocumentsPage />} />
           <Route path="more/documents/:id" element={<DocumentDetailPage />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />

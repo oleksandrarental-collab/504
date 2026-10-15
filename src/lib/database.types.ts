@@ -185,6 +185,21 @@ export interface WarehouseStockRow {
   below_min: boolean
 }
 
+export interface ReportStockMoveRow {
+  id: number
+  item_id: number
+  item_name: string
+  category: string
+  pack_size: number
+  pack_label: string
+  qty: number
+  unit_cost: number | null
+  source_type: string
+  apartment_id: number | null
+  apartment_code: string | null
+  moved_at: string
+}
+
 export interface ToOrderRow {
   item_id: number
   name: string

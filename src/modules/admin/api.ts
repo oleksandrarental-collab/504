@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import type {
   WarehouseStockRow,
+  ReportStockMoveRow,
   ToOrderRow,
   ApartmentGapRow,
   EventRow,
@@ -65,6 +66,76 @@ export async function fetchWarehouseStock(): Promise<WarehouseStockRow[]> {
     .order('name')
   if (error) throw new Error(error.message)
   return data ?? []
+}
+
+export async function fetchReportWarehouseStock(): Promise<WarehouseStockRow[]> {
+  const rows: WarehouseStockRow[] = []
+  for (let start = 0; ; start += 1000) {
+    const { data, error } = await supabase
+      .from('warehouse_stock')
+      .select('item_id,name,category,kind,base_unit,pack_size,pack_label,qty,min_stock,below_min')
+      .order('name')
+      .range(start, start + 999)
+    if (error) throw new Error(error.message)
+    const page = (data ?? []) as WarehouseStockRow[]
+    rows.push(...page)
+    if (page.length < 1000) break
+  }
+  return rows
+}
+
+export async function fetchReportStockMoves(fromISO: string, toISO: string): Promise<ReportStockMoveRow[]> {
+  const rows: Array<StockMoveRow & { moved_at: string }> = []
+  for (let start = 0; ; start += 1000) {
+    const { data, error } = await supabase
+      .from('stock_moves')
+      .select('id,item_id,qty,unit_cost,source_type,apartment_id,moved_at')
+      .gte('moved_at', fromISO)
+      .lt('moved_at', toISO)
+      .order('moved_at', { ascending: false })
+      .range(start, start + 999)
+    if (error) throw new Error(error.message)
+    const page = (data ?? []) as Array<StockMoveRow & { moved_at: string }>
+    rows.push(...page)
+    if (page.length < 1000) break
+  }
+
+  const itemIds = Array.from(new Set(rows.map((row) => row.item_id)))
+  const apartmentIds = Array.from(new Set(rows.map((row) => row.apartment_id).filter((id): id is number => id !== null)))
+  const [itemsResult, apartmentsResult] = await Promise.all([
+    itemIds.length ? supabase.from('items').select('id,name,category_id,pack_size,pack_label').in('id', itemIds) : Promise.resolve({ data: [], error: null }),
+    apartmentIds.length ? supabase.from('apartments').select('id,code').in('id', apartmentIds) : Promise.resolve({ data: [], error: null }),
+  ])
+  if (itemsResult.error) throw new Error(itemsResult.error.message)
+  if (apartmentsResult.error) throw new Error(apartmentsResult.error.message)
+
+  const categoryIds = Array.from(new Set((itemsResult.data ?? []).map((item) => item.category_id)))
+  const categoriesResult = categoryIds.length
+    ? await supabase.from('categories').select('id,name').in('id', categoryIds)
+    : { data: [], error: null }
+  if (categoriesResult.error) throw new Error(categoriesResult.error.message)
+
+  const itemMap = new Map((itemsResult.data ?? []).map((item) => [item.id, item]))
+  const categoryMap = new Map((categoriesResult.data ?? []).map((category) => [category.id, category.name]))
+  const apartmentMap = new Map((apartmentsResult.data ?? []).map((apartment) => [apartment.id, apartment.code]))
+
+  return rows.map((row) => {
+    const item = itemMap.get(row.item_id)
+    return {
+      id: row.id,
+      item_id: row.item_id,
+      item_name: item?.name ?? '—',
+      category: item ? categoryMap.get(item.category_id) ?? '—' : '—',
+      pack_size: Number(item?.pack_size ?? 1),
+      pack_label: item?.pack_label ?? '',
+      qty: Number(row.qty),
+      unit_cost: row.unit_cost == null ? null : Number(row.unit_cost),
+      source_type: row.source_type,
+      apartment_id: row.apartment_id,
+      apartment_code: row.apartment_id == null ? null : apartmentMap.get(row.apartment_id) ?? '—',
+      moved_at: row.moved_at,
+    }
+  })
 }
 
 export async function fetchStockMoves(itemId: number, offset = 0): Promise<StockMoveRow[]> {
