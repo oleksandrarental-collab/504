@@ -34,6 +34,12 @@ export function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
+export function edgeError(data: unknown, error: unknown): Error {
+  const msg = (data as { error?: string } | null)?.error
+    ?? (error instanceof Error ? error.message : String(error))
+  return new Error(msg)
+}
+
 export function ToastContainer() {
   const toasts = useToast((s) => s.toasts)
   const dismiss = useToast((s) => s.dismiss)
