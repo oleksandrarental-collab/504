@@ -1,9 +1,27 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useI18n } from '@/i18n'
-import { toast, errorMessage, edgeError } from '@/lib/toast'
+import { toast, errorMessage } from '@/lib/toast'
 import { Plus, Trash2, Eye, EyeOff, Copy, Check, X, Lock, CreditCard as Edit3, Shield, QrCode, UserCheck } from 'lucide-react'
 import type { AppRole } from '@/lib/database.types'
+
+async function invokeAdminUsers(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase.functions.invoke('admin-users', { body })
+  if (!error && data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
+    throw new Error(data.error)
+  }
+  if (!error) return (data ?? {}) as Record<string, unknown>
+  const context = (error as { context?: unknown }).context
+  if (context instanceof Response) {
+    try {
+      const bodyData = await context.json() as { error?: string }
+      if (bodyData.error) throw new Error(bodyData.error)
+    } catch (responseError) {
+      if (responseError instanceof Error && responseError.message !== 'Unexpected end of JSON input') throw responseError
+    }
+  }
+  throw error
+}
 
 interface AdminUser {
   id: string
@@ -33,9 +51,8 @@ export function UsersPage() {
 
   const load = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'list' } })
-      if (error || data?.error) throw edgeError(data, error)
-      setUsers(data.users ?? [])
+      const data = await invokeAdminUsers({ action: 'list' })
+      setUsers((data.users ?? []) as AdminUser[])
     } catch (e) {
       toast(errorMessage(e), 'error')
     } finally {
@@ -47,8 +64,7 @@ export function UsersPage() {
 
   const handleSetActive = async (id: string, active: boolean) => {
     try {
-      const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'set_active', id, active: !active } })
-      if (error || data?.error) throw edgeError(data, error)
+      await invokeAdminUsers({ action: 'set_active', id, active: !active })
       toast(active ? t.admin.users.inactive : t.admin.users.active, 'success')
       load()
     } catch (e) {
@@ -62,8 +78,7 @@ export function UsersPage() {
   const handleDelete = async (id: string) => {
     if (!confirm(t.admin.users.confirmDelete)) return
     try {
-      const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'delete', id } })
-      if (error || data?.error) throw edgeError(data, error)
+      await invokeAdminUsers({ action: 'delete', id })
       toast(t.admin.users.delete, 'success')
       load()
     } catch (e) {
@@ -149,11 +164,9 @@ export function UsersPage() {
                     onClick={() => {
                       const pw = prompt(t.admin.users.setPassword)
                       if (pw && pw.length >= 8) {
-                        supabase.functions.invoke('admin-users', { body: { action: 'set_password', id: u.id, password: pw } })
-                          .then(({ data, error }) => {
-                            if (error || data?.error) { toast((data as { error?: string } | null)?.error ?? (error instanceof Error ? error.message : String(error)), 'error'); return }
-                            toast(t.admin.users.setPassword, 'success')
-                          })
+                        invokeAdminUsers({ action: 'set_password', id: u.id, password: pw })
+                          .then(() => toast(t.admin.users.setPassword, 'success'))
+                          .catch((e: unknown) => toast(errorMessage(e), 'error'))
                       } else if (pw) {
                         toast(t.auth.bootstrapPassword, 'error')
                       }
@@ -214,8 +227,7 @@ export function UsersPage() {
               <button
                 onClick={async () => {
                   try {
-                    const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'rename', id: renaming, full_name: renameValue.trim() } })
-                    if (error || data?.error) throw edgeError(data, error)
+                    await invokeAdminUsers({ action: 'rename', id: renaming, full_name: renameValue.trim() })
                     toast(t.admin.users.renamed, 'success')
                     setRenaming(null)
                     load()
@@ -283,10 +295,7 @@ function UserCreateForm({ onClose, onCreated }: { onClose: () => void; onCreated
   const handleCreate = async () => {
     setSubmitting(true)
     try {
-      const { data, error } = await supabase.functions.invoke('admin-users', {
-        body: { action: 'create', login, full_name: fullName, password, role },
-      })
-      if (error || data?.error) throw edgeError(data, error)
+      await invokeAdminUsers({ action: 'create', login, full_name: fullName, password, role })
       toast(t.admin.users.created, 'success')
       onCreated(login, password)
     } catch (e) {

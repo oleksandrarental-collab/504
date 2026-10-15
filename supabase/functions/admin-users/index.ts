@@ -15,12 +15,17 @@ Deno.serve(async (req) => {
     const caller = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
     });
-    const { data: { user } } = await caller.auth.getUser();
-    if (!user) return json({ error: 'Нужен вход' }, 401);
+    const { data: authData, error: authError } = await caller.auth.getUser();
+    if (authError || !authData.user) return json({ error: 'Сессия администратора недействительна. Войдите снова.' }, 401);
 
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
-    const { data: me } = await admin.from('profiles').select('id,role,active').eq('id', user.id).single();
-    if (!me || me.role !== 'admin' || !me.active) return json({ error: 'Только администратор' }, 403);
+    const { data: me, error: profileError } = await admin
+      .from('profiles')
+      .select('id,role,active')
+      .eq('id', authData.user.id)
+      .maybeSingle();
+    if (profileError) return json({ error: `Не удалось проверить профиль администратора: ${profileError.message}` }, 500);
+    if (!me || me.role !== 'admin' || !me.active) return json({ error: 'Только активный администратор может управлять пользователями.' }, 403);
 
     const b = await req.json();
     const domain = 'sklad.internal';
@@ -55,11 +60,19 @@ Deno.serve(async (req) => {
         const { data: created, error } = await admin.auth.admin.createUser({
           email: `${login}@${domain}`, password, email_confirm: true,
         });
-        if (error || !created.user) return json({ error: error?.message ?? 'Не удалось создать' }, 400);
+        if (error || !created.user) {
+          const message = error?.message?.toLowerCase().includes('already')
+            ? 'Этот логин уже занят.'
+            : error?.message ?? 'Не удалось создать пользователя.';
+          return json({ error: message }, 400);
+        }
         const { error: pe } = await admin.from('profiles').insert({
           id: created.user.id, login, full_name: fullName, role,
         });
-        if (pe) { await admin.auth.admin.deleteUser(created.user.id); return json({ error: pe.message }, 400); }
+        if (pe) {
+          await admin.auth.admin.deleteUser(created.user.id);
+          return json({ error: `Пользователь создан, но профиль не сохранён: ${pe.message}` }, 400);
+        }
         return json({ id: created.user.id, login });
       }
       case 'set_password': {
