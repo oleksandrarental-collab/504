@@ -2,14 +2,22 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useI18n } from '@/i18n'
 import { toast, errorMessage, edgeError } from '@/lib/toast'
-import { Plus, Trash2, Eye, EyeOff, Copy, Check, X, Lock, CreditCard as Edit3 } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, Copy, Check, X, Lock, CreditCard as Edit3, Shield, QrCode, UserCheck } from 'lucide-react'
+import type { AppRole } from '@/lib/database.types'
 
 interface AdminUser {
   id: string
   login: string
   full_name: string
+  role: AppRole
   active: boolean
   created_at: string
+}
+
+const ROLE_BADGE: Record<AppRole, { bg: string; text: string; icon: typeof Shield }> = {
+  admin: { bg: 'bg-warn-soft', text: 'text-warn', icon: Shield },
+  manager: { bg: 'bg-accent-soft', text: 'text-accent', icon: QrCode },
+  supervisor: { bg: 'bg-ok-soft', text: 'text-ok', icon: UserCheck },
 }
 
 export function UsersPage() {
@@ -21,6 +29,7 @@ export function UsersPage() {
   const [copied, setCopied] = useState<'login' | 'password' | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [roleFilter, setRoleFilter] = useState<AppRole | 'all'>('all')
 
   const load = async () => {
     try {
@@ -43,7 +52,10 @@ export function UsersPage() {
       toast(active ? t.admin.users.inactive : t.admin.users.active, 'success')
       load()
     } catch (e) {
-      toast(errorMessage(e), 'error')
+      const msg = errorMessage(e)
+      if (msg === 'self') toast(t.admin.users.selfDeactivateError, 'error')
+      else if (msg === 'last_admin') toast(t.admin.users.lastAdminError, 'error')
+      else toast(msg, 'error')
     }
   }
 
@@ -55,7 +67,10 @@ export function UsersPage() {
       toast(t.admin.users.delete, 'success')
       load()
     } catch (e) {
-      toast(errorMessage(e), 'error')
+      const msg = errorMessage(e)
+      if (msg === 'self') toast(t.admin.users.selfDeleteError, 'error')
+      else if (msg === 'last_admin') toast(t.admin.users.lastAdminError, 'error')
+      else toast(msg, 'error')
     }
   }
 
@@ -64,6 +79,14 @@ export function UsersPage() {
     setCopied(what)
     setTimeout(() => setCopied(null), 2000)
   }
+
+  const roleLabel = (role: AppRole): string => {
+    if (role === 'admin') return t.admin.users.filterAdmin
+    if (role === 'manager') return t.admin.users.filterManager
+    return t.admin.users.filterSupervisor
+  }
+
+  const filteredUsers = roleFilter === 'all' ? users : users.filter((u) => u.role === roleFilter)
 
   if (loading) return <div className="px-4 pt-8 text-center text-muted">{t.app.loading}</div>
 
@@ -80,64 +103,87 @@ export function UsersPage() {
         </button>
       </div>
 
-      {users.length === 0 ? (
+      <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
+        {(['all', 'admin', 'manager', 'supervisor'] as const).map((rf) => (
+          <button
+            key={rf}
+            onClick={() => setRoleFilter(rf)}
+            className={`rounded-full px-3 py-1.5 text-sm whitespace-nowrap transition-colors border ${
+              roleFilter === rf ? 'bg-accent border-accent text-white' : 'bg-surface border-line text-muted'
+            }`}
+          >
+            {rf === 'all' ? t.admin.users.filterAll : roleLabel(rf)}
+          </button>
+        ))}
+      </div>
+
+      {filteredUsers.length === 0 ? (
         <p className="text-sm text-muted text-center mt-8">{t.admin.users.noUsers}</p>
       ) : (
         <div className="space-y-2">
-          {users.map((u) => (
-            <div key={u.id} className="bg-surface rounded-xl border border-line px-4 py-3">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <p className="text-sm font-medium text-ink">{u.full_name}</p>
-                  <p className="text-xs text-muted">{u.login}</p>
+          {filteredUsers.map((u) => {
+            const badge = ROLE_BADGE[u.role] ?? ROLE_BADGE.supervisor
+            const RoleIcon = badge.icon
+            return (
+              <div key={u.id} className="bg-surface rounded-xl border border-line px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-ink truncate">{u.full_name}</p>
+                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${badge.bg} ${badge.text}`}>
+                        <RoleIcon className="w-3 h-3" />
+                        {roleLabel(u.role)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted">{u.login}</p>
+                  </div>
+                  <button
+                    onClick={() => handleSetActive(u.id, u.active)}
+                    className={`text-xs px-3 py-1.5 rounded-full font-medium shrink-0 ${u.active ? 'bg-ok-soft text-ok' : 'bg-app text-muted'}`}
+                  >
+                    {u.active ? t.admin.users.active : t.admin.users.inactive}
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleSetActive(u.id, u.active)}
-                  className={`text-xs px-3 py-1.5 rounded-full font-medium ${u.active ? 'bg-ok-soft text-ok' : 'bg-app text-muted'}`}
-                >
-                  {u.active ? t.admin.users.active : t.admin.users.inactive}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const pw = prompt(t.admin.users.setPassword)
+                      if (pw && pw.length >= 8) {
+                        supabase.functions.invoke('admin-users', { body: { action: 'set_password', id: u.id, password: pw } })
+                          .then(({ data, error }) => {
+                            if (error || data?.error) { toast((data as { error?: string } | null)?.error ?? (error instanceof Error ? error.message : String(error)), 'error'); return }
+                            toast(t.admin.users.setPassword, 'success')
+                          })
+                      } else if (pw) {
+                        toast(t.auth.bootstrapPassword, 'error')
+                      }
+                    }}
+                    className="text-xs bg-app text-ink rounded-lg px-3 py-1.5 flex items-center gap-1.5"
+                  >
+                    <Lock className="w-3 h-3" />
+                    {t.admin.users.setPassword}
+                  </button>
+                  <button
+                    onClick={() => { setRenaming(u.id); setRenameValue(u.full_name) }}
+                    className="text-xs bg-app text-ink rounded-lg px-3 py-1.5 flex items-center gap-1.5"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    {t.admin.users.rename}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(u.id)}
+                    className="text-xs bg-bad-soft text-bad rounded-lg px-3 py-1.5 flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    {t.admin.users.delete}
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const pw = prompt(t.admin.users.setPassword)
-                    if (pw && pw.length >= 8) {
-                      supabase.functions.invoke('admin-users', { body: { action: 'set_password', id: u.id, password: pw } })
-                        .then(({ data, error }) => {
-                          if (error || data?.error) { toast((data as { error?: string } | null)?.error ?? (error instanceof Error ? error.message : String(error)), 'error'); return }
-                          toast(t.admin.users.setPassword, 'success')
-                        })
-                    } else if (pw) {
-                      toast(t.auth.bootstrapPassword, 'error')
-                    }
-                  }}
-                  className="text-xs bg-app text-ink rounded-lg px-3 py-1.5 flex items-center gap-1.5"
-                >
-                  <Lock className="w-3 h-3" />
-                  {t.admin.users.setPassword}
-                </button>
-                <button
-                  onClick={() => { setRenaming(u.id); setRenameValue(u.full_name) }}
-                  className="text-xs bg-app text-ink rounded-lg px-3 py-1.5 flex items-center gap-1.5"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  {t.admin.users.rename}
-                </button>
-                <button
-                  onClick={() => handleDelete(u.id)}
-                  className="text-xs bg-bad-soft text-bad rounded-lg px-3 py-1.5 flex items-center gap-1.5"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  {t.admin.users.delete}
-                </button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
-      {/* Add user form */}
       {adding && (
         <UserCreateForm
           onClose={() => setAdding(false)}
@@ -149,7 +195,6 @@ export function UsersPage() {
         />
       )}
 
-      {/* Rename modal */}
       {renaming && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-6">
           <div className="bg-surface rounded-2xl w-full max-w-sm p-5 border border-line">
@@ -188,7 +233,6 @@ export function UsersPage() {
         </div>
       )}
 
-      {/* Created credentials */}
       {createdCreds && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-6">
           <div className="bg-surface rounded-2xl w-full max-w-sm p-5 border border-line">
@@ -232,6 +276,7 @@ function UserCreateForm({ onClose, onCreated }: { onClose: () => void; onCreated
   const [login, setLogin] = useState('')
   const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState<AppRole>('supervisor')
   const [showPw, setShowPw] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -239,7 +284,7 @@ function UserCreateForm({ onClose, onCreated }: { onClose: () => void; onCreated
     setSubmitting(true)
     try {
       const { data, error } = await supabase.functions.invoke('admin-users', {
-        body: { action: 'create', login, full_name: fullName, password },
+        body: { action: 'create', login, full_name: fullName, password, role },
       })
       if (error || data?.error) throw edgeError(data, error)
       toast(t.admin.users.created, 'success')
@@ -250,6 +295,12 @@ function UserCreateForm({ onClose, onCreated }: { onClose: () => void; onCreated
       setSubmitting(false)
     }
   }
+
+  const roleOptions: { value: AppRole; label: string }[] = [
+    { value: 'admin', label: t.admin.users.filterAdmin },
+    { value: 'manager', label: t.admin.users.filterManager },
+    { value: 'supervisor', label: t.admin.users.filterSupervisor },
+  ]
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-6">
@@ -271,6 +322,22 @@ function UserCreateForm({ onClose, onCreated }: { onClose: () => void; onCreated
           <div>
             <label className="block text-sm text-ink mb-1">{t.admin.users.fullName}</label>
             <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full bg-app rounded-xl px-4 py-2.5 text-sm focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm text-ink mb-1">{t.admin.users.roleLabel}</label>
+            <div className="flex gap-1.5">
+              {roleOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setRole(opt.value)}
+                  className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors border ${
+                    role === opt.value ? 'bg-accent border-accent text-white' : 'bg-app border-line text-muted'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <label className="block text-sm text-ink mb-1">{t.admin.users.password}</label>

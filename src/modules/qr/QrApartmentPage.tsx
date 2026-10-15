@@ -10,16 +10,15 @@ import {
   createSignedUrl,
   fetchWhatsappContacts,
 } from '@/modules/qr/api'
+import { fetchCleaningEvents } from '@/modules/cleaning/store'
+import type { SvCleaningEvent } from '@/lib/database.types'
 import type { SvApartment, SvNorm, SvItem, ApartmentNote, Contact, NormType } from '@/lib/database.types'
 import { useAuth } from '@/modules/core/store'
 import { useI18n } from '@/i18n'
 import { formatDateTime, isToday, formatQty } from '@/lib/format'
 import { toast, errorMessage } from '@/lib/toast'
 import { getPendingOutbox } from '@/lib/outbox'
-import {
-  CheckCircle2, Wrench, Search, Send, Camera, Video, X,
-  FileText, Loader2, MessageCircle, RefreshCw,
-} from 'lucide-react'
+import { CircleCheck as CheckCircle2, Wrench, Search, Send, Camera, Video, X, FileText, Loader as Loader2, MessageCircle, RefreshCw } from 'lucide-react'
 
 const normTypeOrder: NormType[] = ['asset_standing', 'turnover_replenish', 'cleaning_consumption']
 
@@ -45,7 +44,8 @@ export function QrApartmentPage() {
   const [notFound, setNotFound] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
   const [pendingCount, setPendingCount] = useState(0)
-  const [tab, setTab] = useState<'norms' | 'comments' | 'whatsapp'>('norms')
+  const [tab, setTab] = useState<'norms' | 'comments' | 'whatsapp' | 'history'>('norms')
+  const [cleaningEvents, setCleaningEvents] = useState<SvCleaningEvent[]>([])
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string>('')
 
@@ -67,11 +67,13 @@ export function QrApartmentPage() {
       fetchWhatsappContacts(),
     ])
     if (!apt) { setNotFound(true); setLoading(false); return }
+    const ce = await fetchCleaningEvents(aptId)
     setApartment(apt)
     setNorms(nr)
     setItems(it)
     setNotes(no)
     setContacts(ct)
+    setCleaningEvents(ce)
     setLastUpdated(new Date())
   }, [aptId])
 
@@ -229,6 +231,7 @@ export function QrApartmentPage() {
           <TabButton active={tab === 'norms'} onClick={() => setTab('norms')} label={t.qr.whatShouldBe} />
           <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} label={t.qr.comments} />
           <TabButton active={tab === 'whatsapp'} onClick={() => setTab('whatsapp')} label={t.qr.whatsapp} />
+          <TabButton active={tab === 'history'} onClick={() => setTab('history')} label={t.qr.historyTab} />
         </div>
       </div>
 
@@ -358,6 +361,31 @@ export function QrApartmentPage() {
             notePhotos={notePhotos}
             noteFileUrls={noteFileUrls}
           />
+        )}
+
+        {tab === 'history' && (
+          <div className="space-y-3">
+            {cleaningEvents.length === 0 ? (
+              <p className="text-sm text-muted text-center mt-8">{t.qr.noCleaningHistory}</p>
+            ) : (
+              cleaningEvents.map((ev) => (
+                <div key={ev.id} className="bg-surface rounded-xl border border-line px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-ink">{n(formatDateTime(ev.cleaned_at))}</span>
+                    {ev.status === 'reversed' && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-bad-soft text-bad font-medium">
+                        {t.qr.cleaningReversed}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted mt-1">
+                    {ev.staff_names ?? t.qr.staffNamesEmpty}
+                  </p>
+                  {ev.note && <p className="text-xs text-muted mt-1">{ev.note}</p>}
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
 

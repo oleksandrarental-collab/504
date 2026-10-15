@@ -38,12 +38,13 @@ function App() {
     content = <LoginScreen />
   } else {
     const home = homePathForRole(profile.role)
+    const role = profile.role
     content = (
       <BrowserRouter>
         <Routes>
-          <Route path="/sv/*" element={<SvRoutes />} />
-          <Route path="/qr/*" element={<QrRoutes />} />
-          <Route path="/admin/*" element={<AdminRoutes />} />
+          <Route path="/sv/*" element={role === 'admin' || role === 'supervisor' ? <SvRoutes /> : <Navigate to={home} replace />} />
+          <Route path="/qr/*" element={role === 'admin' || role === 'manager' ? <QrRoutes /> : <Navigate to={home} replace />} />
+          <Route path="/admin/*" element={role === 'admin' ? <AdminRoutes /> : <Navigate to={home} replace />} />
           <Route path="*" element={<Navigate to={home} replace />} />
         </Routes>
       </BrowserRouter>

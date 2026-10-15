@@ -32,6 +32,7 @@ const QrPage = lazy(() => import('@/modules/admin/QrPage').then(m => ({ default:
 const DocumentsPage = lazy(() => import('@/modules/admin/DocumentsPage').then(m => ({ default: m.DocumentsPage })))
 const DocumentDetailPage = lazy(() => import('@/modules/admin/DocumentDetailPage').then(m => ({ default: m.DocumentDetailPage })))
 const QrApartmentPage = lazy(() => import('@/modules/qr/QrApartmentPage').then(m => ({ default: m.QrApartmentPage })))
+const QrIndexPage = lazy(() => import('@/modules/qr/QrIndexPage').then(m => ({ default: m.QrIndexPage })))
 
 function Loading() {
   const { t } = useI18n()
@@ -93,10 +94,11 @@ export function QrRoutes() {
     <QrLayout>
       <Suspense fallback={<Loading />}>
         <Routes>
+          <Route index element={<QrIndexPage />} />
           <Route path=":id" element={<QrApartmentPage />} />
           <Route path=":id/clean" element={<QrCleanRoute />} />
           <Route path=":id/incident" element={<QrIncidentRoute />} />
-          <Route path="*" element={<Navigate to="/sv" replace />} />
+          <Route path="*" element={<Navigate to="/qr" replace />} />
         </Routes>
       </Suspense>
     </QrLayout>
